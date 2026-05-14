@@ -1,22 +1,31 @@
 export function Sidebar() {
     return (
-      <aside className="w-64 bg-zinc-900 text-white p-5">
+      <aside className="w-full md:w-64 bg-zinc-900 text-white p-5">
         <h1 className="text-2xl font-bold mb-10">
           Estoque
         </h1>
   
-        <nav className="flex flex-col gap-4">
-          <button className="text-left hover:text-blue-400 transition">
+        <nav className="flex md:flex-col gap-4 overflow-x-auto">
+          <a
+            href="#top"
+            className="text-left hover:text-blue-400 transition"
+          >
             Dashboard
-          </button>
+          </a>
   
-          <button className="text-left hover:text-blue-400 transition">
+          <a
+            href="#products"
+            className="text-left hover:text-blue-400 transition"
+          >
             Produtos
-          </button>
+          </a>
   
-          <button className="text-left hover:text-blue-400 transition">
+          <a
+            href="#sales"
+            className="text-left hover:text-blue-400 transition"
+          >
             Vendas
-          </button>
+          </a>
         </nav>
       </aside>
     );
