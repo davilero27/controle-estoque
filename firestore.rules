@@ -1,0 +1,208 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* =========================================
+       AUTH
+    ========================================= */
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    /* =========================================
+       ORGANIZAÇÃO DO USUÁRIO
+    ========================================= */
+
+    function userOrg() {
+      return !signedIn()
+        ? null
+        : request.auth.token.organizationId != null
+        ? request.auth.token.organizationId
+        : exists(
+            /databases/$(database)/documents/users/$(request.auth.uid)
+          )
+        ? get(
+            /databases/$(database)/documents/users/$(request.auth.uid)
+          ).data.organizationId
+        : request.auth.uid;
+    }
+
+    function sameOrg(organizationId) {
+      return signedIn()
+        && userOrg() == organizationId;
+    }
+
+    /* =========================================
+       ROLES
+    ========================================= */
+
+    function userRole() {
+  return exists(
+    /databases/$(database)/documents/users/$(request.auth.uid)
+  )
+    ? get(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+      ).data.role
+    : "employee";
+}
+
+    function isOwner() {
+      return signedIn()
+        && userRole() == "owner";
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && (
+          userRole() == "owner"
+          || userRole() == "admin"
+        );
+    }
+
+    function isEmployee() {
+      return signedIn()
+        && userRole() == "employee";
+    }
+
+    /* =========================================
+       PERMISSÕES
+    ========================================= */
+
+    function canManageProducts() {
+      return isAdmin();
+    }
+
+    function canManageSales() {
+      return isAdmin()
+        || isEmployee();
+    }
+
+    function canManageOrganization() {
+      return isOwner();
+    }
+
+    /* =========================================
+       USERS
+    ========================================= */
+
+    match /users/{userId} {
+
+      allow read:
+        if signedIn()
+        && request.auth.uid == userId;
+
+      allow create, update:
+        if signedIn()
+        && request.auth.uid == userId;
+    }
+
+    /* =========================================
+       ORGANIZAÇÕES
+    ========================================= */
+
+    match /organizations/{organizationId} {
+
+      allow read:
+        if sameOrg(organizationId);
+
+      allow create:
+        if signedIn()
+        && organizationId == request.auth.uid;
+
+      allow update:
+        if sameOrg(organizationId)
+        && canManageOrganization();
+
+      /* =========================================
+         MEMBERS
+      ========================================= */
+
+      match /members/{memberId} {
+
+        allow read:
+          if sameOrg(organizationId);
+
+        allow create:
+          if signedIn()
+          && (
+            (
+              organizationId == request.auth.uid
+              && memberId == request.auth.uid
+            )
+            || (
+              sameOrg(organizationId)
+              && isAdmin()
+            )
+          );
+
+        allow update:
+          if sameOrg(organizationId)
+          && isAdmin();
+      }
+
+      /* =========================================
+         INVITES
+      ========================================= */
+
+      match /invites/{inviteId} {
+
+        allow read, create, update:
+          if sameOrg(organizationId)
+          && isAdmin();
+      }
+
+      /* =========================================
+         PRODUTOS
+      ========================================= */
+
+      match /produtos/{productId} {
+
+        allow read:
+          if sameOrg(organizationId);
+
+        allow create, update, delete:
+          if sameOrg(organizationId)
+          && canManageProducts();
+      }
+
+            /* =========================================
+         VENDAS
+      ========================================= */
+
+      match /vendas/{saleId} {
+
+        allow read:
+          if sameOrg(organizationId);
+
+        allow create:
+          if sameOrg(organizationId)
+          && canManageSales();
+
+        allow update:
+          if sameOrg(organizationId)
+          && isAdmin();
+
+        allow delete:
+          if false;
+      }
+    }
+
+    /* =========================================
+       MIGRAÇÃO LEGADO
+    ========================================= */
+
+    match /produtos/{productId} {
+
+      allow read, write:
+        if signedIn();
+    }
+
+    match /vendas/{saleId} {
+
+      allow read, write:
+        if signedIn();
+    }
+  }
+}

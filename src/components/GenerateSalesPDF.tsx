@@ -5,11 +5,16 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 import {
-  collection,
   getDocs,
+  orderBy,
+  query,
 } from "firebase/firestore";
 
-import { db } from "@/lib/firestore";
+import { useAuth } from "@/contexts/AuthContext";
+
+import { getSalesCollection } from "@/services/sales";
+
+import { toast } from "sonner";
 
 type JsPDFWithLastAutoTable =
   jsPDF & {
@@ -19,15 +24,22 @@ type JsPDFWithLastAutoTable =
   };
 
 export function GenerateSalesPDF() {
+  const { organizationId } = useAuth();
+
   async function handleGeneratePDF() {
+    if (!organizationId) {
+      toast.error("Organização não identificada");
+      return;
+    }
+
     try {
+      const salesQuery = query(
+        getSalesCollection(organizationId),
+        orderBy("criadoEm", "desc")
+      );
+
       const snapshot =
-        await getDocs(
-          collection(
-            db,
-            "vendas"
-          )
-        );
+        await getDocs(salesQuery);
 
       const sales =
         snapshot.docs.map((doc) => {
@@ -38,7 +50,9 @@ export function GenerateSalesPDF() {
             data.produtoNome,
             data.quantidade,
             `R$ ${Number(
-              data.valorTotal || 0
+              data.valorTotal ||
+                data.total ||
+                0
             ).toFixed(2)}`,
           ];
         });
@@ -52,7 +66,9 @@ export function GenerateSalesPDF() {
             return (
               acc +
               Number(
-                data.valorTotal || 0
+                data.valorTotal ||
+                  data.total ||
+                  0
               )
             );
           },
@@ -102,12 +118,12 @@ export function GenerateSalesPDF() {
       pdf.save(
         "relatorio-vendas.pdf"
       );
+
+      toast.success("Relatório gerado com sucesso");
     } catch (error) {
       console.log(error);
 
-      alert(
-        "Erro ao gerar PDF"
-      );
+      toast.error("Erro ao gerar PDF");
     }
   }
 

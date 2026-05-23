@@ -1,52 +1,67 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { Bell, Menu, Search } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
 
-export function Header() {
-  const router = useRouter();
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
 
-  const { user, logout } = useAuth();
+export function Header({
+  onMenuClick,
+}: HeaderProps) {
+  const { user } = useAuth();
 
-  // Faz o logout e redireciona para a tela de login em seguida
-  async function handleLogout() {
-    await logout();
+  const displayName =
+    user?.email?.split("@")[0] ?? "Admin";
 
-    router.push("/login");
-  }
+  const initial =
+    displayName.charAt(0).toUpperCase();
 
   return (
-    <header className="w-full bg-zinc-900 border-b border-zinc-800 p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-bold text-white">
-          Controle de Estoque
-        </h1>
+    <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-zinc-800/80 bg-[#09090b]/95 px-4 py-3 backdrop-blur-md md:px-6">
+      <button
+        type="button"
+        aria-label="Abrir menu"
+        onClick={onMenuClick}
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-400 transition-colors hover:text-white md:hidden"
+      >
+        <Menu className="h-4 w-4" />
+      </button>
 
-        <p className="text-zinc-400">
-          Gerencie seus produtos
-        </p>
+      <div className="relative mx-auto hidden w-full max-w-md flex-1 lg:flex">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+        <input
+          type="search"
+          placeholder="Buscar..."
+          className="w-full rounded-lg border border-zinc-800 bg-zinc-900/80 py-2.5 pl-10 pr-4 text-sm text-white outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-700"
+        />
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="text-right">
-          <p className="text-sm text-zinc-500">
-            Usuário logado
-          </p>
-
-          {/* Exibe o e-mail do usuário autenticado; o ?. evita erro se o usuário ainda for null */}
-          <strong className="text-white">
-            {user?.email}
-          </strong>
-        </div>
-
+      <div className="ml-auto flex items-center gap-2 sm:gap-3 md:gap-4">
         <button
           type="button"
-          onClick={handleLogout}
-          className="bg-red-600 hover:bg-red-700 transition px-4 py-2 rounded-lg text-white"
+          aria-label="Notificações"
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-400 transition-colors hover:text-white"
         >
-          Sair
+          <Bell className="h-4 w-4" />
         </button>
+
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+            {initial}
+          </div>
+
+          <div className="hidden flex-col sm:flex">
+            <span className="text-sm font-semibold capitalize text-white">
+              {displayName}
+            </span>
+            <span className="text-xs text-zinc-500">
+              Administrador
+            </span>
+          </div>
+        </div>
       </div>
     </header>
   );

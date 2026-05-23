@@ -1,248 +1,452 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-
-import { db } from "@/lib/firestore";
-import type { Product } from "@/lib/types";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   collection,
-  onSnapshot,
   deleteDoc,
   doc,
+  onSnapshot,
+  orderBy,
+  query,
 } from "firebase/firestore";
 
+import {
+  Pencil,
+  Trash2,
+  Search,
+  Package,
+} from "lucide-react";
+
+import { toast } from "sonner";
+
+import { db } from "@/lib/firestore";
+
+import type { Product } from "@/lib/types";
+
+import { useAuth } from "@/contexts/AuthContext";
+
+import { formatCurrency } from "@/utils/formatCurrency";
+
+import {
+  canManageProducts,
+} from "@/utils/permissions";
+
+import { Button } from "@/components/ui/Button";
+
+import { Badge } from "@/components/ui/Badge";
+
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/Table";
+
+import { EmptyState } from "@/components/ui/EmptyState";
+
 interface ProductListProps {
-  onEditProduct: (product: Product) => void;
-  refreshTrigger: number;
+  onEditProduct: (
+    product: Product
+  ) => void;
 }
 
 export function ProductList({
   onEditProduct,
-  refreshTrigger,
 }: ProductListProps) {
+
   const [products, setProducts] =
     useState<Product[]>([]);
 
   const [search, setSearch] =
     useState("");
 
-  const [showLowStock, setShowLowStock] =
-    useState(false);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [sortBy, setSortBy] =
-    useState("nome");
-
-  // Converte os dados do Firestore
-  const mapProduct = useCallback(
-    (
-      docSnap: {
-        id: string;
-        data: () => unknown;
-      }
-    ): Product => {
-      const data = docSnap.data() as {
-        nome?: string;
-        preco?: unknown;
-        estoque?: unknown;
-      };
-
-      return {
-        id: docSnap.id,
-        nome: data.nome ?? "",
-        preco: Number(data.preco ?? 0),
-        estoque: Number(
-          data.estoque ?? 0
-        ),
-      };
-    },
-    []
+  const [
+    productToDelete,
+    setProductToDelete,
+  ] = useState<Product | null>(
+    null
   );
 
-  async function handleDeleteProduct(
-    id: string
-  ) {
-    try {
-      await deleteDoc(
-        doc(db, "produtos", id)
-      );
-    } catch (error) {
-      console.log(error);
+  const {
+    organizationId,
+    role,
+  } = useAuth();
 
-      alert("Erro ao deletar produto");
-    }
-  }
+  const canManage =
+    canManageProducts(role);
 
+  // Carregar produtos
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, "produtos"),
-      (querySnapshot) => {
-        setProducts(
-          querySnapshot.docs.map(
-            mapProduct
-          )
-        );
-      },
-      (error) => {
-        console.log(error);
-      }
-    );
+
+    if (!organizationId) {
+      return;
+    }
+
+    const productsQuery =
+      query(
+        collection(
+          db,
+          "organizations",
+          organizationId,
+          "produtos"
+        ),
+
+        orderBy(
+          "nome",
+          "asc"
+        )
+      );
+
+    const unsubscribe =
+      onSnapshot(
+        productsQuery,
+
+        (snapshot) => {
+
+          const productsList =
+            snapshot.docs.map(
+              (doc) => ({
+                id: doc.id,
+                ...doc.data(),
+              })
+            ) as Product[];
+
+          setProducts(
+            productsList
+          );
+
+          setLoading(false);
+        },
+
+        (error) => {
+          console.error(
+            "ERRO PRODUTOS:",
+            error
+          );
+        }
+      );
 
     return () => unsubscribe();
-  }, [mapProduct, refreshTrigger]);
 
-  // Pesquisa + filtro + ordenação
+  }, [organizationId]);
+
+  // Filtrar produtos
   const filteredProducts =
-    products
-      .filter((product) => {
-        const matchesSearch =
+    useMemo(() => {
+
+      return products.filter(
+        (product) =>
           product.nome
             .toLowerCase()
             .includes(
               search.toLowerCase()
-            );
+            )
+      );
 
-        const matchesLowStock =
-          !showLowStock ||
-          product.estoque <= 5;
+    }, [products, search]);
 
-        return (
-          matchesSearch &&
-          matchesLowStock
-        );
-      })
-      .sort((a, b) => {
-        if (sortBy === "nome") {
-          return a.nome.localeCompare(
-            b.nome
-          );
-        }
+  // Excluir produto
+  async function handleDeleteProduct() {
 
-        if (sortBy === "preco") {
-          return b.preco - a.preco;
-        }
+    if (
+      !organizationId ||
+      !productToDelete
+    ) {
+      return;
+    }
 
-        if (sortBy === "estoque") {
-          return (
-            b.estoque - a.estoque
-          );
-        }
+    try {
 
-        return 0;
-      });
+      await deleteDoc(
+        doc(
+          db,
+          "organizations",
+          organizationId,
+          "produtos",
+          productToDelete.id
+        )
+      );
+
+      toast.success(
+        "Produto excluído com sucesso"
+      );
+
+      setProductToDelete(
+        null
+      );
+
+    } catch {
+
+      toast.error(
+        "Erro ao excluir produto"
+      );
+    }
+  }
+
+  // Loading
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        <p className="text-zinc-400">
+          Carregando produtos...
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div
-      id="products"
-      className="bg-zinc-900 p-6 rounded-2xl mt-6"
-    >
-      <h2 className="text-2xl font-bold mb-6">
-        Produtos
-      </h2>
+    <div className="space-y-4">
 
       {/* Pesquisa */}
-      <input
-        type="text"
-        placeholder="Pesquisar produto..."
-        value={search}
-        onChange={(e) =>
-          setSearch(e.target.value)
-        }
-        className="w-full bg-zinc-800 p-3 rounded-lg outline-none mb-4"
-      />
+      <div className="relative">
 
-      {/* Filtro estoque baixo */}
-      <button
-        type="button"
-        onClick={() =>
-          setShowLowStock(
-            !showLowStock
-          )
-        }
-        className={`w-full mb-4 px-4 py-3 rounded-lg transition ${
-          showLowStock
-            ? "bg-red-600"
-            : "bg-zinc-800"
-        }`}
-      >
-        {showLowStock
-          ? "Mostrando estoque baixo"
-          : "Mostrar apenas estoque baixo"}
-      </button>
+        <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
 
-      {/* Ordenação */}
-      <select
-        value={sortBy}
-        onChange={(e) =>
-          setSortBy(e.target.value)
-        }
-        className="w-full bg-zinc-800 p-3 rounded-lg outline-none mb-6"
-      >
-        <option value="nome">
-          Ordenar por Nome
-        </option>
+        <input
+          type="text"
+          placeholder="Pesquisar produto..."
+          value={search}
+          onChange={(e) =>
+            setSearch(
+              e.target.value
+            )
+          }
+          className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 py-3 pl-11 pr-4 outline-none transition focus:border-blue-500"
+        />
 
-        <option value="preco">
-          Ordenar por Preço
-        </option>
-
-        <option value="estoque">
-          Ordenar por Estoque
-        </option>
-      </select>
-
-      {/* Lista */}
-      <div className="flex flex-col gap-4">
-        {filteredProducts.map(
-          (product) => (
-            <div
-              key={product.id}
-              className="bg-zinc-800 p-4 rounded-xl flex flex-col md:flex-row gap-4 md:items-center md:justify-between"
-            >
-              <div className="flex-1">
-                <h3 className="font-semibold">
-                  {product.nome}
-                </h3>
-
-                <p className="text-zinc-400 text-sm">
-                  Estoque:{" "}
-                  {product.estoque}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <p className="text-zinc-400 font-medium">
-                  R$ {product.preco}
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onEditProduct(product)
-                    }
-                    className="bg-yellow-600 hover:bg-yellow-700 transition px-4 py-2 rounded-lg w-full sm:w-auto"
-                  >
-                    Editar
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleDeleteProduct(
-                        product.id
-                      )
-                    }
-                    className="bg-red-600 hover:bg-red-700 transition px-4 py-2 rounded-lg w-full sm:w-auto"
-                  >
-                    Excluir
-                  </button>
-                </div>
-              </div>
-            </div>
-          )
-        )}
       </div>
+
+      {/* Estado vazio */}
+      {filteredProducts.length ===
+        0 ? (
+
+        <EmptyState
+          icon={Package}
+          title="Nenhum produto encontrado"
+          description="Não existem produtos cadastrados."
+        />
+
+      ) : (
+
+        <Table>
+
+          <TableHeader>
+
+            <TableRow>
+
+              <TableHead>
+                Produto
+              </TableHead>
+
+              <TableHead>
+                Categoria
+              </TableHead>
+
+              <TableHead>
+                Estoque
+              </TableHead>
+
+              <TableHead>
+                Preço
+              </TableHead>
+
+              <TableHead>
+                Status
+              </TableHead>
+
+              <TableHead>
+                Ações
+              </TableHead>
+
+            </TableRow>
+
+          </TableHeader>
+
+          <TableBody>
+
+            {filteredProducts.map(
+              (product) => {
+
+                const lowStock =
+                  product.estoque <=
+                  (product.estoqueMinimo ??
+                    5);
+
+                return (
+                  <TableRow
+                    key={product.id}
+                  >
+
+                    {/* Produto */}
+                    <TableCell>
+
+                      <div>
+
+                        <p className="font-medium text-white">
+                          {
+                            product.nome
+                          }
+                        </p>
+
+                        {product.sku && (
+                          <p className="text-xs text-zinc-500">
+                            SKU:{" "}
+                            {
+                              product.sku
+                            }
+                          </p>
+                        )}
+
+                      </div>
+
+                    </TableCell>
+
+                    {/* Categoria */}
+                    <TableCell>
+                      {
+                        product.categoria ??
+                        "-"
+                      }
+                    </TableCell>
+
+                    {/* Estoque */}
+                    <TableCell>
+                      {
+                        product.estoque
+                      }
+                    </TableCell>
+
+                    {/* Preço */}
+                    <TableCell>
+                      {formatCurrency(
+                        product.preco
+                      )}
+                    </TableCell>
+
+                    {/* Status */}
+                    <TableCell>
+
+                      {lowStock ? (
+                        <Badge variant="danger">
+                          Baixo
+                        </Badge>
+                      ) : (
+                        <Badge variant="success">
+                          Normal
+                        </Badge>
+                      )}
+
+                    </TableCell>
+
+                    {/* Ações */}
+                    <TableCell>
+
+                      <div className="flex items-center gap-2">
+
+                        {/* Editar */}
+                        {canManage && (
+                          <Button
+                            onClick={() =>
+                              onEditProduct(
+                                product
+                              )
+                            }
+                          >
+
+                            <Pencil className="h-4 w-4" />
+
+                          </Button>
+                        )}
+
+                        {/* Excluir */}
+                        {canManage && (
+                          <Button
+                            variant="danger"
+                            onClick={() =>
+                              setProductToDelete(
+                                product
+                              )
+                            }
+                          >
+
+                            <Trash2 className="h-4 w-4" />
+
+                          </Button>
+                        )}
+
+                      </div>
+
+                    </TableCell>
+
+                  </TableRow>
+                );
+              }
+            )}
+
+          </TableBody>
+
+        </Table>
+      )}
+
+      {/* Modal exclusão */}
+      {productToDelete && (
+
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+
+            <h2 className="text-xl font-bold text-white">
+              Excluir produto
+            </h2>
+
+            <p className="mt-2 text-zinc-400">
+              Deseja realmente excluir:
+            </p>
+
+            <p className="mt-1 font-medium text-white">
+              {
+                productToDelete.nome
+              }
+            </p>
+
+            <div className="mt-6 flex justify-end gap-3">
+
+              <Button
+                onClick={() =>
+                  setProductToDelete(
+                    null
+                  )
+                }
+              >
+                Cancelar
+              </Button>
+
+              <Button
+                variant="danger"
+                onClick={
+                  handleDeleteProduct
+                }
+              >
+                Excluir
+              </Button>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
     </div>
   );
 }

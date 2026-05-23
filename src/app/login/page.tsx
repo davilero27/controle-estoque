@@ -1,27 +1,26 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/contexts/AuthContext";
-
-
 
 export default function LoginPage() {
   const router = useRouter();
-
   const { login } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
 
   async function handleLogin() {
     if (!email || !password) {
-      alert("Preencha todos os campos");
-
+      toast.info("Preencha todos os campos");
       return;
     }
 
@@ -30,60 +29,73 @@ export default function LoginPage() {
 
       await login(email, password);
 
-      router.push("/");
+      router.push("/dashboard");
     } catch (error) {
       console.log(error);
-
-      alert("Email ou senha inválidos");
+      toast.error("Email ou senha inválidos");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
-      <div className="bg-zinc-900 w-full max-w-md rounded-2xl p-8">
-        <h1 className="text-3xl font-bold text-white mb-2">
+    <main className="flex min-h-screen items-center justify-center bg-zinc-950 p-4 text-white sm:p-6">
+      <section className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/90 p-6 shadow-2xl shadow-black/30 sm:p-8">
+        <h1 className="mb-2 text-3xl font-bold text-white">
           Login
         </h1>
 
-        <p className="text-zinc-400 mb-6">
+        <p className="mb-6 text-zinc-400">
           Entre para acessar o sistema
         </p>
 
         <div className="flex flex-col gap-4">
-          <input
+          <Input
             type="email"
             placeholder="Seu email"
             value={email}
-            onChange={(e) =>
-              setEmail(e.target.value)
+            disabled={loading}
+            onChange={(event) =>
+              setEmail(event.target.value)
             }
-            className="bg-zinc-800 text-white p-3 rounded-lg outline-none"
+            className="bg-zinc-950 text-white placeholder:text-zinc-600"
           />
 
-          <input
+          <Input
             type="password"
             placeholder="Sua senha"
             value={password}
-            onChange={(e) =>
-              setPassword(e.target.value)
+            disabled={loading}
+            onChange={(event) =>
+              setPassword(event.target.value)
             }
-            className="bg-zinc-800 text-white p-3 rounded-lg outline-none"
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                handleLogin();
+              }
+            }}
+            className="bg-zinc-950 text-white placeholder:text-zinc-600"
           />
 
-          <button
+          <div className="flex justify-end">
+            <Link
+              href="/forgot-password"
+              className="text-sm font-medium text-blue-400 transition hover:text-blue-300"
+            >
+              Esqueci minha senha
+            </Link>
+          </div>
+
+          <Button
             type="button"
             onClick={handleLogin}
             disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 transition p-3 rounded-lg text-white font-semibold"
+            className="w-full"
           >
-            {loading
-              ? "Entrando..."
-              : "Entrar"}
-          </button>
+            {loading ? "Entrando..." : "Entrar"}
+          </Button>
         </div>
-      </div>
+      </section>
     </main>
   );
 }
