@@ -23,6 +23,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getSalesCollection } from "@/services/sales";
 
 import type { Sale as BaseSale } from "@/lib/types";
+import {
+  getSaleProductName,
+  getSaleQuantity,
+  getSaleTotal,
+} from "@/lib/types";
 
 export interface Sale extends BaseSale {
   date: Date | null;
@@ -43,10 +48,15 @@ export function useSales() {
 
   const [sales, setSales] = useState<Sale[]>([]);
 
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     if (!organizationId) {
+      setLoading(false);
       return;
     }
+
+    setLoading(true);
 
     const salesQuery = query(
       getSalesCollection(organizationId),
@@ -60,7 +70,7 @@ export function useSales() {
         const salesList = snapshot.docs.map((doc) => {
           const data = doc.data();
 
-          return {
+          const base: BaseSale = {
             id: doc.id,
             organizationId:
               data.organizationId ?? organizationId,
@@ -76,35 +86,26 @@ export function useSales() {
               data.paymentMethod ?? "dinheiro",
             status: data.status ?? "paga",
             receiptUrl: data.receiptUrl ?? "",
-            produtoNome:
-              data.produtoNome ??
-              (data.items ?? [])
-                .map(
-                  (item: { productName?: string }) =>
-                    item.productName
-                )
-                .filter(Boolean)
-                .join(", "),
-            quantidade: Number(
-              data.quantidade ??
-                (data.items ?? []).reduce(
-                  (
-                    acc: number,
-                    item: { quantity?: number }
-                  ) => acc + Number(item.quantity ?? 0),
-                  0
-                )
-            ),
-            valorTotal: Number(
-              data.valorTotal ?? data.total ?? 0
-            ),
             criadoEm: data.criadoEm,
             canceladoEm: data.canceladoEm,
+            // Preserva campos legados para compatibilidade
+            produtoNome: data.produtoNome,
+            quantidade: data.quantidade,
+            valorTotal: data.valorTotal,
+          };
+
+          return {
+            ...base,
             date: parseFirestoreDate(data.criadoEm),
           };
         });
 
         setSales(salesList);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("useSales error:", error);
+        setLoading(false);
       }
     );
 
@@ -113,21 +114,33 @@ export function useSales() {
 
   const totalRevenue = useMemo(
     () =>
-      sales.reduce(
-        (acc, sale) => acc + sale.valorTotal,
-        0
-      ),
+      sales
+        .filter((s) => s.status !== "cancelada")
+        .reduce((acc, sale) => acc + getSaleTotal(sale), 0),
     [sales]
   );
 
   const topProduct = useMemo(() => {
     const productsMap: Record<string, number> = {};
 
-    sales.forEach((sale) => {
-      productsMap[sale.produtoNome] =
-        (productsMap[sale.produtoNome] ?? 0) +
-        sale.quantidade;
-    });
+    sales
+      .filter((s) => s.status !== "cancelada")
+      .forEach((sale) => {
+        if (sale.items && sale.items.length > 0) {
+          sale.items.forEach((item) => {
+            productsMap[item.productName] =
+              (productsMap[item.productName] ?? 0) +
+              item.quantity;
+          });
+        } else {
+          const name = getSaleProductName(sale);
+          if (name) {
+            productsMap[name] =
+              (productsMap[name] ?? 0) +
+              getSaleQuantity(sale);
+          }
+        }
+      });
 
     let bestProduct = "";
     let bestQuantity = 0;
@@ -149,24 +162,27 @@ export function useSales() {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
 
-    const todaySales = sales.filter(
+    const activeSales = sales.filter(
+      (s) => s.status !== "cancelada"
+    );
+
+    const todaySales = activeSales.filter(
       (sale) =>
         sale.date && isSameDay(sale.date, today)
     );
 
-    const yesterdaySales = sales.filter(
+    const yesterdaySales = activeSales.filter(
       (sale) =>
-        sale.date &&
-        isSameDay(sale.date, yesterday)
+        sale.date && isSameDay(sale.date, yesterday)
     );
 
     const salesTodayCount = todaySales.length;
     const revenueToday = todaySales.reduce(
-      (acc, sale) => acc + sale.valorTotal,
+      (acc, sale) => acc + getSaleTotal(sale),
       0
     );
     const revenueYesterday = yesterdaySales.reduce(
-      (acc, sale) => acc + sale.valorTotal,
+      (acc, sale) => acc + getSaleTotal(sale),
       0
     );
 
@@ -193,8 +209,7 @@ export function useSales() {
   }, [sales]);
 
   const last7DaysChart = useMemo(() => {
-    const result: { name: string; total: number }[] =
-      [];
+    const result: { name: string; total: number }[] = [];
 
     for (let i = 6; i >= 0; i--) {
       const date = new Date();
@@ -204,14 +219,12 @@ export function useSales() {
       const dayTotal = sales
         .filter((sale) => {
           if (!sale.date) return false;
+          if (sale.status === "cancelada") return false;
           const saleDate = new Date(sale.date);
           saleDate.setHours(0, 0, 0, 0);
           return saleDate.getTime() === date.getTime();
         })
-        .reduce(
-          (acc, sale) => acc + sale.valorTotal,
-          0
-        );
+        .reduce((acc, sale) => acc + getSaleTotal(sale), 0);
 
       result.push({
         name: DAY_LABELS[date.getDay()],
@@ -229,6 +242,7 @@ export function useSales() {
 
   return {
     sales,
+    loading,
     totalRevenue,
     topProduct,
     recentSales,

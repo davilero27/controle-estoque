@@ -27,10 +27,16 @@ export function useProducts() {
   const [products, setProducts] =
     useState<Product[]>([]);
 
+  const [loading, setLoading] =
+    useState(true);
+
   useEffect(() => {
     if (!organizationId) {
+      setLoading(false);
       return;
     }
+
+    setLoading(true);
 
     const productsQuery = query(
       getProductsCollection(organizationId),
@@ -56,8 +62,7 @@ export function useProducts() {
               sku: data.sku ?? "",
               codigoBarras: data.codigoBarras ?? "",
               estoqueMinimo: Number(
-                data.estoqueMinimo ??
-                  LOW_STOCK_THRESHOLD
+                data.estoqueMinimo ?? LOW_STOCK_THRESHOLD
               ),
               fornecedor: data.fornecedor ?? "",
               imageUrl: data.imageUrl ?? "",
@@ -65,6 +70,11 @@ export function useProducts() {
           });
 
         setProducts(productsList);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("useProducts error:", error);
+        setLoading(false);
       }
     );
 
@@ -89,8 +99,7 @@ export function useProducts() {
         .filter(
           (product) =>
             product.estoque <=
-              (product.estoqueMinimo ??
-                LOW_STOCK_THRESHOLD)
+            (product.estoqueMinimo ?? LOW_STOCK_THRESHOLD)
         )
         .sort((a, b) => a.estoque - b.estoque),
     [products]
@@ -98,13 +107,17 @@ export function useProducts() {
 
   const lowStockProducts = lowStockItems.length;
 
+  // Produtos recentes: ordenados por criação (os últimos 5 inseridos)
+  // Como a query usa orderBy("nome"), pegamos os primeiros 5 por ora
+  // Ideal: query separada com orderBy("criadoEm", "desc") limit(5)
   const recentProducts = useMemo(
-    () => products.slice(0, 5),
+    () => [...products].slice(0, 5),
     [products]
   );
 
   return {
     products,
+    loading,
     totalProducts,
     totalStockValue,
     lowStockProducts,

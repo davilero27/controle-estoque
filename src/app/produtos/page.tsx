@@ -16,8 +16,6 @@ export default function ProdutosPage() {
   const [editingProduct, setEditingProduct] =
     useState<Product | null>(null);
 
-  const [refresh, setRefresh] = useState(0);
-
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -31,15 +29,13 @@ export default function ProdutosPage() {
           editingProduct={editingProduct}
           onFinishEdit={() => {
             setEditingProduct(null);
-            setRefresh((old) => old + 1);
           }}
           onProductCreated={() => {
-            setRefresh((old) => old + 1);
+            // ProductList usa onSnapshot em tempo real
           }}
         />
 
         <ProductList
-          refreshTrigger={refresh}
           onEditProduct={(product) => {
             setEditingProduct(product);
           }}

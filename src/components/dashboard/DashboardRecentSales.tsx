@@ -3,6 +3,11 @@
 import Link from "next/link";
 
 import type { Sale } from "@/hooks/useSales";
+import {
+  getSaleProductName,
+  getSaleQuantity,
+  getSaleTotal,
+} from "@/lib/types";
 
 import { formatCurrency } from "@/utils/formatCurrency";
 
@@ -28,7 +33,7 @@ export function DashboardRecentSales({
           <thead>
             <tr className="border-b border-zinc-800 text-zinc-500">
               <th className="pb-3 font-medium">Produto</th>
-              <th className="pb-3 font-medium">Quantidade</th>
+              <th className="pb-3 font-medium">Qtd</th>
               <th className="pb-3 font-medium">Total</th>
               <th className="pb-3 font-medium">Data</th>
             </tr>
@@ -51,15 +56,15 @@ export function DashboardRecentSales({
                   className="border-b border-zinc-800/60 last:border-0"
                 >
                   <td className="py-3 font-medium text-white">
-                    {sale.produtoNome}
+                    {getSaleProductName(sale)}
                   </td>
 
                   <td className="py-3 text-zinc-300">
-                    {sale.quantidade}
+                    {getSaleQuantity(sale)}
                   </td>
 
                   <td className="py-3 text-zinc-300">
-                    {formatCurrency(sale.valorTotal)}
+                    {formatCurrency(getSaleTotal(sale))}
                   </td>
 
                   <td className="py-3 text-zinc-500">

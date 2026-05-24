@@ -14,6 +14,13 @@ import { useAuth } from "@/contexts/AuthContext";
 
 import { getSalesCollection } from "@/services/sales";
 
+import type { Sale } from "@/lib/types";
+import {
+  getSaleProductName,
+  getSaleQuantity,
+  getSaleTotal,
+} from "@/lib/types";
+
 import { toast } from "sonner";
 
 type JsPDFWithLastAutoTable =
@@ -22,6 +29,14 @@ type JsPDFWithLastAutoTable =
       finalY: number;
     };
   };
+
+function buildSaleRow(data: Sale): string[] {
+  return [
+    getSaleProductName(data),
+    String(getSaleQuantity(data)),
+    `R$ ${getSaleTotal(data).toFixed(2)}`,
+  ];
+}
 
 export function GenerateSalesPDF() {
   const { organizationId } = useAuth();
@@ -38,91 +53,51 @@ export function GenerateSalesPDF() {
         orderBy("criadoEm", "desc")
       );
 
-      const snapshot =
-        await getDocs(salesQuery);
+      const snapshot = await getDocs(salesQuery);
 
-      const sales =
-        snapshot.docs.map((doc) => {
-          const data =
-            doc.data();
+      const rawSales = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Sale[];
 
-          return [
-            data.produtoNome,
-            data.quantidade,
-            `R$ ${Number(
-              data.valorTotal ||
-                data.total ||
-                0
-            ).toFixed(2)}`,
-          ];
-        });
+      // Excluir canceladas do relatório
+      const activeSales = rawSales.filter(
+        (s) => s.status !== "cancelada"
+      );
 
-      const total =
-        snapshot.docs.reduce(
-          (acc, doc) => {
-            const data =
-              doc.data();
+      const rows = activeSales.map(buildSaleRow);
 
-            return (
-              acc +
-              Number(
-                data.valorTotal ||
-                  data.total ||
-                  0
-              )
-            );
-          },
-          0
-        );
+      const total = activeSales.reduce(
+        (acc, sale) => acc + getSaleTotal(sale),
+        0
+      );
 
-      const pdf =
-        new jsPDF();
+      const pdf = new jsPDF();
 
       pdf.setFontSize(18);
-
-      pdf.text(
-        "Relatório de Vendas",
-        14,
-        20
-      );
+      pdf.text("Relatório de Vendas", 14, 20);
 
       autoTable(pdf, {
         startY: 30,
-
-        head: [
-          [
-            "Produto",
-            "Quantidade",
-            "Valor",
-          ],
-        ],
-
-        body: sales,
+        head: [["Produto", "Quantidade", "Valor"]],
+        body: rows,
       });
 
-      const docWithTable =
-        pdf as JsPDFWithLastAutoTable;
-
+      const docWithTable = pdf as JsPDFWithLastAutoTable;
       const afterTableY =
-        docWithTable.lastAutoTable
-          .finalY + 15;
+        docWithTable.lastAutoTable.finalY + 15;
 
       docWithTable.text(
-        `Faturamento Total: R$ ${total.toFixed(
-          2
-        )}`,
+        `Faturamento Total: R$ ${total.toFixed(2)}`,
         14,
         afterTableY
       );
 
-      pdf.save(
-        "relatorio-vendas.pdf"
-      );
+      pdf.save("relatorio-vendas.pdf");
 
       toast.success("Relatório gerado com sucesso");
     } catch (error) {
-      console.log(error);
-
+      console.error(error);
       toast.error("Erro ao gerar PDF");
     }
   }
@@ -130,9 +105,7 @@ export function GenerateSalesPDF() {
   return (
     <button
       type="button"
-      onClick={
-        handleGeneratePDF
-      }
+      onClick={handleGeneratePDF}
       className="bg-blue-600 hover:bg-blue-700 transition px-6 py-3 rounded-xl mt-6"
     >
       Gerar Relatório PDF

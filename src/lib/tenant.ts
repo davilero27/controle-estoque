@@ -1,6 +1,6 @@
-export const DEFAULT_ROLE = "admin";
+import type { UserRole } from "@/lib/types";
 
-export type UserRole = "admin" | "user";
+export type { UserRole };
 
 export interface TenantContext {
   organizationId: string;

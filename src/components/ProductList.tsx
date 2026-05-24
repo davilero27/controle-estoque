@@ -52,14 +52,14 @@ import {
 import { EmptyState } from "@/components/ui/EmptyState";
 
 interface ProductListProps {
-  refreshTrigger: number;
   onEditProduct: (
     product: Product
   ) => void;
+  /** @deprecated O listener onSnapshot atualiza em tempo real — não é necessário. */
+  refreshTrigger?: number;
 }
 
 export function ProductList({
-  refreshTrigger,
   onEditProduct,
 }: ProductListProps) {
 
@@ -140,7 +140,7 @@ export function ProductList({
 
     return () => unsubscribe();
 
-  }, [organizationId, refreshTrigger]);
+  }, [organizationId]);
 
   // Filtrar produtos
   const filteredProducts =

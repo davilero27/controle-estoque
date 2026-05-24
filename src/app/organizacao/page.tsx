@@ -7,7 +7,6 @@ import {
 
 import {
   Building2,
-  Database,
   MailPlus,
   Save,
 } from "lucide-react";
@@ -37,14 +36,13 @@ import {
   createOrganizationInvite,
   getOrganization,
   listOrganizationInvites,
-  migrateLegacyData,
   updateOrganizationName,
 } from "@/services/organizations";
 
+// migrateLegacyData foi removido desta UI — usar script administrativo separado
+
 function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-    email
-  );
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 export default function OrganizationSettingsPage() {
@@ -54,40 +52,21 @@ export default function OrganizationSettingsPage() {
     role,
   } = useAuth();
 
-  const [
-    organizationName,
-    setOrganizationName,
-  ] = useState("");
+  const [organizationName, setOrganizationName] =
+    useState("");
 
-  const [
-    inviteEmail,
-    setInviteEmail,
-  ] = useState("");
+  const [inviteEmail, setInviteEmail] =
+    useState("");
 
-  const [
-    inviteRole,
-    setInviteRole,
-  ] = useState<UserRole>(
-    "employee"
-  );
+  const [inviteRole, setInviteRole] =
+    useState<UserRole>("employee");
 
   const [invites, setInvites] =
-    useState<
-      OrganizationInvite[]
-    >([]);
+    useState<OrganizationInvite[]>([]);
 
-  const [saving, setSaving] =
-    useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const [
-    inviting,
-    setInviting,
-  ] = useState(false);
-
-  const [
-    migrating,
-    setMigrating,
-  ] = useState(false);
+  const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
 
@@ -103,30 +82,16 @@ export default function OrganizationSettingsPage() {
           organization,
           organizationInvites,
         ] = await Promise.all([
-          getOrganization(
-            organizationId!
-          ),
-          listOrganizationInvites(
-            organizationId!
-          ),
+          getOrganization(organizationId!),
+          listOrganizationInvites(organizationId!),
         ]);
 
-        setOrganizationName(
-          organization?.name ??
-            ""
-        );
-
-        setInvites(
-          organizationInvites
-        );
+        setOrganizationName(organization?.name ?? "");
+        setInvites(organizationInvites);
 
       } catch (error) {
-
-        console.log(error);
-
-        toast.error(
-          "Erro ao carregar organização"
-        );
+        console.error(error);
+        toast.error("Erro ao carregar organização");
       }
     }
 
@@ -136,182 +101,77 @@ export default function OrganizationSettingsPage() {
 
   async function handleSaveOrganization() {
 
-    if (!organizationId) {
-      return;
-    }
+    if (!organizationId) return;
 
     if (role !== "owner") {
-
-      toast.error(
-        "Apenas o owner pode editar a organização"
-      );
-
+      toast.error("Apenas o owner pode editar a organização");
       return;
     }
 
-    if (
-      organizationName
-        .trim()
-        .length < 2
-    ) {
-
-      toast.error(
-        "Informe um nome válido"
-      );
-
+    if (organizationName.trim().length < 2) {
+      toast.error("Informe um nome válido");
       return;
     }
 
     try {
-
       setSaving(true);
-
       await updateOrganizationName(
         organizationId,
         organizationName.trim()
       );
-
-      toast.success(
-        "Organização atualizada"
-      );
-
+      toast.success("Organização atualizada");
     } catch (error) {
-
-      console.log(error);
-
-      toast.error(
-        "Erro ao salvar organização"
-      );
-
+      console.error(error);
+      toast.error("Erro ao salvar organização");
     } finally {
-
       setSaving(false);
     }
   }
 
   async function handleCreateInvite() {
 
-    if (!organizationId) {
-      return;
-    }
+    if (!organizationId) return;
 
     if (role !== "owner") {
-
-      toast.error(
-        "Apenas o owner pode convidar usuários"
-      );
-
+      toast.error("Apenas o owner pode convidar usuários");
       return;
     }
 
-    const normalizedEmail =
-      inviteEmail
-        .trim()
-        .toLowerCase();
+    const normalizedEmail = inviteEmail.trim().toLowerCase();
 
-    if (
-      !isValidEmail(
-        normalizedEmail
-      )
-    ) {
-
-      toast.error(
-        "Informe um email válido"
-      );
-
+    if (!isValidEmail(normalizedEmail)) {
+      toast.error("Informe um email válido");
       return;
     }
 
     try {
-
       setInviting(true);
 
       await createOrganizationInvite({
         organizationId,
-        email:
-          normalizedEmail,
+        email: normalizedEmail,
         role: inviteRole,
       });
 
       const nextInvites =
-        await listOrganizationInvites(
-          organizationId
-        );
+        await listOrganizationInvites(organizationId);
 
       setInvites(nextInvites);
-
       setInviteEmail("");
+      setInviteRole("employee");
 
-      setInviteRole(
-        "employee"
-      );
-
-      toast.success(
-        "Convite registrado"
-      );
+      toast.success("Convite registrado com sucesso");
 
     } catch (error) {
-
-      console.log(error);
-
-      toast.error(
-        "Erro ao registrar convite"
-      );
-
+      console.error(error);
+      toast.error("Erro ao registrar convite");
     } finally {
-
       setInviting(false);
     }
   }
 
-  async function handleMigration() {
-
-    if (!organizationId) {
-      return;
-    }
-
-    if (role !== "owner") {
-
-      toast.error(
-        "Apenas o owner pode migrar dados"
-      );
-
-      return;
-    }
-
-    try {
-
-      setMigrating(true);
-
-      const result =
-        await migrateLegacyData(
-          organizationId
-        );
-
-      toast.success(
-        `Migração concluída: ${result.products} produtos e ${result.sales} vendas`
-      );
-
-    } catch (error) {
-
-      console.log(error);
-
-      toast.error(
-        "Erro ao migrar dados antigos"
-      );
-
-    } finally {
-
-      setMigrating(false);
-    }
-  }
-
   return (
-    <RoleGuard
-      allowedRoles={[
-        "owner",
-      ]}
-    >
+    <RoleGuard allowedRoles={["owner"]}>
 
       <AppLayout>
 
@@ -319,7 +179,7 @@ export default function OrganizationSettingsPage() {
 
           <SectionTitle
             title="Organização"
-            description="Gerencie empresa, convites e migração multiempresa"
+            description="Gerencie empresa e convites"
           />
 
           <div className="grid gap-6 xl:grid-cols-2">
@@ -330,21 +190,16 @@ export default function OrganizationSettingsPage() {
               <div className="mb-5 flex items-center gap-3">
 
                 <div className="rounded-xl bg-blue-600 p-3">
-
                   <Building2 className="h-5 w-5 text-white" />
-
                 </div>
 
                 <div>
-
                   <h2 className="font-semibold text-white">
                     Dados da empresa
                   </h2>
-
                   <p className="text-sm text-zinc-500">
                     Nome exibido no sistema
                   </p>
-
                 </div>
 
               </div>
@@ -352,39 +207,22 @@ export default function OrganizationSettingsPage() {
               <div className="space-y-4">
 
                 <Input
-                  value={
-                    organizationName
-                  }
-                  disabled={
-                    saving
-                  }
+                  value={organizationName}
+                  disabled={saving}
                   placeholder="Nome da organização"
-                  onChange={(
-                    event
-                  ) =>
-                    setOrganizationName(
-                      event.target.value
-                    )
+                  onChange={(event) =>
+                    setOrganizationName(event.target.value)
                   }
                 />
 
                 <Button
                   type="button"
-                  disabled={
-                    saving
-                  }
-                  onClick={
-                    handleSaveOrganization
-                  }
+                  disabled={saving}
+                  onClick={handleSaveOrganization}
                   className="flex items-center gap-2"
                 >
-
                   <Save className="h-4 w-4" />
-
-                  {saving
-                    ? "Salvando..."
-                    : "Salvar alterações"}
-
+                  {saving ? "Salvando..." : "Salvar alterações"}
                 </Button>
 
               </div>
@@ -397,21 +235,16 @@ export default function OrganizationSettingsPage() {
               <div className="mb-5 flex items-center gap-3">
 
                 <div className="rounded-xl bg-emerald-600 p-3">
-
                   <MailPlus className="h-5 w-5 text-white" />
-
                 </div>
 
                 <div>
-
                   <h2 className="font-semibold text-white">
                     Convites
                   </h2>
-
                   <p className="text-sm text-zinc-500">
                     Convide usuários para a organização
                   </p>
-
                 </div>
 
               </div>
@@ -420,113 +253,65 @@ export default function OrganizationSettingsPage() {
 
                 <Input
                   type="email"
-                  value={
-                    inviteEmail
-                  }
-                  disabled={
-                    inviting
-                  }
+                  value={inviteEmail}
+                  disabled={inviting}
                   placeholder="usuario@empresa.com"
-                  onChange={(
-                    event
-                  ) =>
-                    setInviteEmail(
-                      event.target.value
-                    )
+                  onChange={(event) =>
+                    setInviteEmail(event.target.value)
                   }
                 />
 
                 <select
-                  value={
-                    inviteRole
-                  }
-                  disabled={
-                    inviting
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setInviteRole(
-                      event.target
-                        .value as UserRole
-                    )
+                  value={inviteRole}
+                  disabled={inviting}
+                  onChange={(event) =>
+                    setInviteRole(event.target.value as UserRole)
                   }
                   className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
                 >
-
-                  <option value="employee">
-                    Funcionário
-                  </option>
-
-                  <option value="admin">
-                    Admin
-                  </option>
-
+                  <option value="employee">Funcionário</option>
+                  <option value="admin">Admin</option>
                 </select>
 
               </div>
 
               <Button
                 type="button"
-                disabled={
-                  inviting
-                }
-                onClick={
-                  handleCreateInvite
-                }
+                disabled={inviting}
+                onClick={handleCreateInvite}
                 className="mt-3 w-full"
               >
-
-                {inviting
-                  ? "Registrando..."
-                  : "Registrar convite"}
-
+                {inviting ? "Registrando..." : "Registrar convite"}
               </Button>
 
               <div className="mt-5 space-y-2">
 
-                {invites.length ===
-                0 ? (
+                {invites.length === 0 ? (
 
                   <p className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-500">
-
                     Nenhum convite registrado.
-
                   </p>
 
                 ) : (
 
-                  invites.map(
-                    (invite) => (
+                  invites.map((invite) => (
 
-                      <div
-                        key={invite.id}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-sm"
-                      >
+                    <div
+                      key={invite.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-sm"
+                    >
 
-                        <div>
-
-                          <p className="font-medium text-white">
-                            {
-                              invite.email
-                            }
-                          </p>
-
-                          <p className="text-xs text-zinc-500">
-                            {
-                              invite.role
-                            }{" "}
-                            ·{" "}
-                            {
-                              invite.status
-                            }
-                          </p>
-
-                        </div>
-
+                      <div>
+                        <p className="font-medium text-white">
+                          {invite.email}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          {invite.role} · {invite.status}
+                        </p>
                       </div>
-                    )
-                  )
+
+                    </div>
+                  ))
                 )}
 
               </div>
@@ -534,54 +319,6 @@ export default function OrganizationSettingsPage() {
             </Card>
 
           </div>
-
-          {/* Migração */}
-          <Card>
-
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-
-              <div className="flex items-center gap-3">
-
-                <div className="rounded-xl bg-violet-600 p-3">
-
-                  <Database className="h-5 w-5 text-white" />
-
-                </div>
-
-                <div>
-
-                  <h2 className="font-semibold text-white">
-                    Migração de dados
-                  </h2>
-
-                  <p className="text-sm text-zinc-500">
-                    Migra produtos e vendas antigas para a organização atual.
-                  </p>
-
-                </div>
-
-              </div>
-
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={
-                  migrating
-                }
-                onClick={
-                  handleMigration
-                }
-              >
-
-                {migrating
-                  ? "Migrando..."
-                  : "Migrar dados"}
-
-              </Button>
-
-            </div>
-
-          </Card>
 
         </div>
 

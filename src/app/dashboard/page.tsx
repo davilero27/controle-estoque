@@ -32,6 +32,7 @@ import { DashboardRecentSales } from "@/components/dashboard/DashboardRecentSale
 export default function DashboardPage() {
 
   const {
+    loading: loadingProducts,
     totalProducts,
     lowStockProducts,
     lowStockItems,
@@ -39,6 +40,7 @@ export default function DashboardPage() {
   } = useProducts();
 
   const {
+    loading: loadingSales,
     salesTodayCount,
     revenueToday,
     salesDiff,
@@ -47,11 +49,8 @@ export default function DashboardPage() {
     recentSales,
   } = useSales();
 
-  // Loading
-  const isLoading =
-    totalProducts === 0 &&
-    salesTodayCount === 0 &&
-    revenueToday === 0;
+  // Loading real — aguarda os dois hooks
+  const isLoading = loadingProducts || loadingSales;
 
   // Tendências
   const salesTrend =
