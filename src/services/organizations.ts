@@ -20,72 +20,43 @@ import type {
 
 export interface UserProfile {
   uid: string;
-
   email: string;
-
   organizationId: string | null;
-
   role: UserRole;
 }
 
-export function getUserProfileRef(
-  uid: string
-) {
+// ─── Refs ────────────────────────────────────────────────────────────────────
 
-  return doc(
-    db,
-    "users",
-    uid
-  );
+export function getUserProfileRef(uid: string) {
+  return doc(db, "users", uid);
 }
 
-export function getOrganizationRef(
-  organizationId: string
-) {
-
-  return doc(
-    db,
-    "organizations",
-    organizationId
-  );
+export function getOrganizationRef(organizationId: string) {
+  return doc(db, "organizations", organizationId);
 }
 
-export async function getUserProfile(
-  uid: string
-) {
+// ─── Leitura ─────────────────────────────────────────────────────────────────
 
-  const snapshot =
-    await getDoc(
-      getUserProfileRef(uid)
-    );
+export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+  // ✅ Lança o erro para o chamador tratar (AuthContext já tem try/catch)
+  const snapshot = await getDoc(getUserProfileRef(uid));
 
-  if (!snapshot.exists()) {
-    return null;
-  }
+  if (!snapshot.exists()) return null;
 
   return snapshot.data() as UserProfile;
 }
 
 export async function getOrganization(
   organizationId: string
-) {
+): Promise<Organization | null> {
+  const snapshot = await getDoc(getOrganizationRef(organizationId));
 
-  const snapshot =
-    await getDoc(
-      getOrganizationRef(
-        organizationId
-      )
-    );
+  if (!snapshot.exists()) return null;
 
-  if (!snapshot.exists()) {
-    return null;
-  }
-
-  return {
-    id: snapshot.id,
-    ...snapshot.data(),
-  } as Organization;
+  return { id: snapshot.id, ...snapshot.data() } as Organization;
 }
+
+// ─── Criação de organização ───────────────────────────────────────────────────
 
 export async function createOrganizationForUser({
   uid,
@@ -93,109 +64,61 @@ export async function createOrganizationForUser({
   name,
 }: {
   uid: string;
-
   email: string;
-
   name: string;
 }) {
+  const organizationId = uid;
+  const batch = writeBatch(db);
 
-  const organizationId =
-    uid;
-
-  const batch =
-    writeBatch(db);
-
-  const organizationRef =
-    getOrganizationRef(
-      organizationId
-    );
-
-  const userRef =
-    getUserProfileRef(uid);
-
-  const memberRef = doc(
-    db,
-    "organizations",
-    organizationId,
-    "members",
-    uid
-  );
+  const organizationRef = getOrganizationRef(organizationId);
+  const userRef = getUserProfileRef(uid);
+  const memberRef = doc(db, "organizations", organizationId, "members", uid);
 
   // Organização
-  batch.set(
-    organizationRef,
-    {
-      name,
-
-      ownerId: uid,
-
-      createdAt:
-        serverTimestamp(),
-
-      updatedAt:
-        serverTimestamp(),
-    }
-  );
+  batch.set(organizationRef, {
+    name,
+    ownerId: uid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
 
   // Usuário
-  batch.set(
-    userRef,
-    {
-      uid,
+  batch.set(userRef, {
+    uid,
+    email,
+    organizationId,
+    role: "owner",
+    updatedAt: serverTimestamp(),
+  });
 
-      email,
-
-      organizationId,
-
-      role: "owner",
-
-      updatedAt:
-        serverTimestamp(),
-    }
-  );
-
-  // Member
-  batch.set(
-    memberRef,
-    {
-      uid,
-
-      email,
-
-      role: "owner",
-
-      status: "active",
-
-      createdAt:
-        serverTimestamp(),
-    }
-  );
+  // Membro
+  batch.set(memberRef, {
+    uid,
+    email,
+    role: "owner",
+    status: "active",
+    createdAt: serverTimestamp(),
+  });
 
   await batch.commit();
 
   return organizationId;
 }
 
+// ─── Atualização ─────────────────────────────────────────────────────────────
+
 export async function updateOrganizationName(
   organizationId: string,
   name: string
 ) {
-
   await setDoc(
-    getOrganizationRef(
-      organizationId
-    ),
-    {
-      name,
-
-      updatedAt:
-        serverTimestamp(),
-    },
-    {
-      merge: true,
-    }
+    getOrganizationRef(organizationId),
+    { name, updatedAt: serverTimestamp() },
+    { merge: true }
   );
 }
+
+// ─── Convites ─────────────────────────────────────────────────────────────────
 
 export async function createOrganizationInvite({
   organizationId,
@@ -203,156 +126,69 @@ export async function createOrganizationInvite({
   role,
 }: {
   organizationId: string;
-
   email: string;
-
   role: UserRole;
 }) {
-
   const inviteRef = doc(
-    collection(
-      db,
-      "organizations",
-      organizationId,
-      "invites"
-    )
+    collection(db, "organizations", organizationId, "invites")
   );
 
-  await setDoc(
-    inviteRef,
-    {
-      email,
-
-      role,
-
-      status: "pending",
-
-      createdAt:
-        serverTimestamp(),
-    }
-  );
+  await setDoc(inviteRef, {
+    email,
+    role,
+    status: "pending",
+    createdAt: serverTimestamp(),
+  });
 }
 
 export async function listOrganizationInvites(
   organizationId: string
-) {
+): Promise<OrganizationInvite[]> {
+  const invitesQuery = query(
+    collection(db, "organizations", organizationId, "invites"),
+    orderBy("createdAt", "desc")
+  );
 
-  const invitesQuery =
-    query(
-      collection(
-        db,
-        "organizations",
-        organizationId,
-        "invites"
-      ),
+  const snapshot = await getDocs(invitesQuery);
 
-      orderBy(
-        "createdAt",
-        "desc"
-      )
-    );
-
-  const snapshot =
-    await getDocs(
-      invitesQuery
-    );
-
-  return snapshot.docs.map(
-    (inviteDoc) => ({
-      id: inviteDoc.id,
-
-      ...inviteDoc.data(),
-    })
-  ) as OrganizationInvite[];
+  return snapshot.docs.map((inviteDoc) => ({
+    id: inviteDoc.id,
+    ...inviteDoc.data(),
+  })) as OrganizationInvite[];
 }
 
-export async function migrateLegacyData(
-  organizationId: string
-) {
+// ─── Migração legado ──────────────────────────────────────────────────────────
 
-  const [
-    productsSnapshot,
-    salesSnapshot,
-  ] = await Promise.all([
-    getDocs(
-      collection(
-        db,
-        "produtos"
-      )
-    ),
-
-    getDocs(
-      collection(
-        db,
-        "vendas"
-      )
-    ),
+export async function migrateLegacyData(organizationId: string) {
+  const [productsSnapshot, salesSnapshot] = await Promise.all([
+    getDocs(collection(db, "produtos")),
+    getDocs(collection(db, "vendas")),
   ]);
 
-  const batch =
-    writeBatch(db);
+  const batch = writeBatch(db);
 
   // Produtos
-  productsSnapshot.docs.forEach(
-    (productDoc) => {
-
-      batch.set(
-        doc(
-          db,
-          "organizations",
-          organizationId,
-          "produtos",
-          productDoc.id
-        ),
-        {
-          ...productDoc.data(),
-
-          organizationId,
-
-          migratedAt:
-            serverTimestamp(),
-        },
-        {
-          merge: true,
-        }
-      );
-    }
-  );
+  productsSnapshot.docs.forEach((productDoc) => {
+    batch.set(
+      doc(db, "organizations", organizationId, "produtos", productDoc.id),
+      { ...productDoc.data(), organizationId, migratedAt: serverTimestamp() },
+      { merge: true }
+    );
+  });
 
   // Vendas
-  salesSnapshot.docs.forEach(
-    (saleDoc) => {
-
-      batch.set(
-        doc(
-          db,
-          "organizations",
-          organizationId,
-          "vendas",
-          saleDoc.id
-        ),
-        {
-          ...saleDoc.data(),
-
-          organizationId,
-
-          migratedAt:
-            serverTimestamp(),
-        },
-        {
-          merge: true,
-        }
-      );
-    }
-  );
+  salesSnapshot.docs.forEach((saleDoc) => {
+    batch.set(
+      doc(db, "organizations", organizationId, "vendas", saleDoc.id),
+      { ...saleDoc.data(), organizationId, migratedAt: serverTimestamp() },
+      { merge: true }
+    );
+  });
 
   await batch.commit();
 
   return {
-    products:
-      productsSnapshot.size,
-
-    sales:
-      salesSnapshot.size,
+    products: productsSnapshot.size,
+    sales: salesSnapshot.size,
   };
-} 
+}

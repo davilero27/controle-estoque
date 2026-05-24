@@ -16,22 +16,15 @@ service cloud.firestore {
     ========================================= */
 
     function userOrg() {
-      return !signedIn()
-        ? null
-        : request.auth.token.organizationId != null
-        ? request.auth.token.organizationId
-        : exists(
-            /databases/$(database)/documents/users/$(request.auth.uid)
-          )
-        ? get(
-            /databases/$(database)/documents/users/$(request.auth.uid)
-          ).data.organizationId
-        : request.auth.uid;
+        return get(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        ).data.organizationId;
+}
     }
 
     function sameOrg(organizationId) {
-      return signedIn()
-        && userOrg() == organizationId;
+        return signedIn()
+           && userOrg() == organizationId;
     }
 
     /* =========================================
@@ -39,9 +32,9 @@ service cloud.firestore {
     ========================================= */
 
     function userRole() {
-  return exists(
-    /databases/$(database)/documents/users/$(request.auth.uid)
-  )
+        return exists(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+        )
     ? get(
         /databases/$(database)/documents/users/$(request.auth.uid)
       ).data.role
@@ -205,4 +198,3 @@ service cloud.firestore {
         if signedIn();
     }
   }
-}

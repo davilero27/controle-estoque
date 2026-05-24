@@ -52,12 +52,14 @@ import {
 import { EmptyState } from "@/components/ui/EmptyState";
 
 interface ProductListProps {
+  refreshTrigger: number;
   onEditProduct: (
     product: Product
   ) => void;
 }
 
 export function ProductList({
+  refreshTrigger,
   onEditProduct,
 }: ProductListProps) {
 
@@ -138,7 +140,7 @@ export function ProductList({
 
     return () => unsubscribe();
 
-  }, [organizationId]);
+  }, [organizationId, refreshTrigger]);
 
   // Filtrar produtos
   const filteredProducts =
